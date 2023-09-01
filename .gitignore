@@ -1,0 +1,15 @@
+# dependencies
+node_modules
+**/node_modules
+
+.git
+
+# misc
+.DS_Store
+
+# idea
+.idea
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
