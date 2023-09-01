@@ -1,0 +1,80 @@
+version: '3'
+services:
+
+  redis:
+    image: redis:latest
+    hostname: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-net
+    volumes:
+      - redis:/data
+
+  elasticsearch:
+    image: elasticsearch:8.9.0
+    container_name: elasticsearch
+    environment:
+      - xpack.security.enabled=false
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - app-net
+
+  extractor:
+    build:
+      context: ./
+      dockerfile: ./data_extractor/Dockerfile
+    depends_on:
+      - redis
+    hostname: extractor
+    volumes:
+      - ./data_extractor:/app
+#    ports:
+#      - "4001:3000"
+    command: [ "node", "index.js" ]
+    environment:
+      - REDIS_URL=redis
+    networks:
+      - app-net
+
+  retrieval:
+    build:
+      context: ./
+      dockerfile: ./data_retrieval/Dockerfile
+    depends_on:
+      - redis
+      - elasticsearch
+    hostname: retrieval
+    volumes:
+      - ./data_retrieval:/app
+      - ./data_retrieval/node_modules:/app/node_modules
+    ports:
+      - "4000:3101"
+    command: [ "node", "index.js" ]
+    environment:
+      - REDIS_URL=redis
+      - ES_URL=elasticsearch
+    networks:
+      - app-net
+
+networks:
+  app-net:
+
+volumes:
+  redis:
+    driver: local
+  elasticsearch:
+    driver: local

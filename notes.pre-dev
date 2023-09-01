@@ -1,0 +1,58 @@
+** THIS FILE WAS WRITTEN BEFORE THE PROJECT WAS DEVELOPED ** DAY STARTED: Thursday, 24.08.2023
+
+This project will need to be split into the following
+
+- It would have been nice to add a messaging queue like RabbitMQ
+    - It would add 2-3 extra days of working to fully have an operational RMQ
+        - Needs logic for the service
+        - Probably ( Best case scenario ) needs a monorepo structure
+        - Aprox. 1 day would be the testing of RMQ
+
+- Fastest infra would be
+    - One server open from Dockerfile or anything CLI
+    - communication between services via EventEmitters (maybe???)
+
+
+- Needs Kubernetes
+    - Needs research on how to use it.
+    - Kubernetes needed I guess for load-balancing and scaling
+
+- Data Extraction
+    - microservice
+    - reads a file
+    - crawl pages > 10 pages deep
+    - the algorithm needs to finish in max. 15s per line of file
+    - the algorithm needs to be split in chunks and it should not break if something goes wrong
+    - data to be extracted
+        - domain
+        - phone number
+            - to extract a phone we can try the following:
+                - extract by anchor tag that have href with <check below> in it:
+                    - tel:
+                    - callto:
+                    - sms:
+                    - fax:
+            - to extract social media links:
+                - search for anchors and verify domain name from a list of known domains
+            - to extract address
+                - looks like there is more work involved in here
+                    - we need a common accessor that is found on multiple sites ( HARDER THAN IT LOOKS!!! )
+                    - there is a tag called address in HTML ( might be useful but it's not common on other websites )
+
+                    - experimental
+                        - One idea could be grab only the paragrah tags
+
+- Data Retrieval
+    -microservice
+
+    - Logical PART
+        - one idea would be to use redis pub/sub?
+        - merge the extracted data with a dataset from a csv
+        - store the result in ES
+        - sanitize the data ( if we have time )
+
+
+    - REST API PART
+        - uses express
+        - swagger (if we have time)
+        - allow query to es
