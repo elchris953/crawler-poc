@@ -34,7 +34,7 @@ subRedis.on('message', async () => {
           },
         doc_as_upsert: true
       }, {
-        skip: [409]
+        ignore: [409]
       });
     }
   }));
