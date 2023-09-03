@@ -2,9 +2,11 @@ const logger = require('pino')({ name: 'data_extractor' });
 
 const {getData} = require("./lib/dataParser");
 const client = require("./lib/elasticCon");
-const crypto = require("crypto");
 
-const { redis, subRedis, pubRedis } = require('./lib/redisCon')
+const { redis, subRedis } = require('./lib/redisCon')
+
+// How would you store a dataset to allow querying by company name?
+// - I would probably add it as an alias and actual document field
 
 subRedis.on('message', async () => {
   logger.info('Retrieval starting...');
@@ -21,15 +23,18 @@ subRedis.on('message', async () => {
     if(foundData) {
       logger.info('Creating document for domain: ' + foundData.domain);
 
-      // Create document in elastic
-      await client.create({
-        'index': foundData.domain, // We index it by domain name since a domain can have multiple subdomains
-        'id': crypto.randomBytes(20).toString('hex'), // I was thinking that maybe a hash would've been better, but I didn't had time to research a robust way to do it
-        'document':
+      // Create or Update document in elastic
+      await client.update({
+        index: foundData.domain,
+        id: `${data.hostname}-${data.profile ? data.profile : 'no-social'}`,
+        doc:
           {
             ...foundData,
             ...data
-          }
+          },
+        doc_as_upsert: true
+      }, {
+        skip: [409]
       });
     }
   }));

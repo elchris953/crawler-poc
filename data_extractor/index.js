@@ -5,7 +5,7 @@ const {chunk} = require("lodash");
 // Many magic strings here, should be replaced with a config file
 const logger = require('pino')({ name: 'data_extractor' });
 
-const { redis, subRedis, pubRedis } = require('./lib/redisCon')
+const { redis, pubRedis } = require('./lib/redisCon')
 
 logger.info('Data extraction service opened');
 
@@ -13,11 +13,13 @@ logger.info('Data extraction service opened');
 // In a best case scenario you would have a cronjob or consumer that activates this service everytime it had a new file/source
 (async () => {
   try {
+    const time = new Date();
     logger.info('Extracting starting...')
 
     // Start the data extraction
     await main();
 
+    console.log(`Extracting finished in ${(new Date() - time)/ 1000}s`);
     // After is finished, start the data retrieval
     pubRedis.publish('startRetrieval', JSON.stringify({ jobFinished: true }), () => {
       logger.info('Message published to start retrieval');
@@ -35,18 +37,22 @@ async function main () {
   await redis.del('accessedURLs');
   await redis.del('crawledData');
 
-  const CHUNK_SIZE = 100;
+  const CHUNK_SIZE = 250;
   const chunkedData = chunk(data, CHUNK_SIZE)
 
   // Parallelize the data extraction
   const parallelData = await parallelize(chunkedData);
-  parallelData.forEach((result) => {
-    if(result.status === 'rejected') {
-      // In here we could have keep track of the chunks that failed stored them somewhere and retry them later
-      // Not implementing it since it would require more time in testing it out and being sure it works
-      logger.error(result.reason);
-    }
-  });
+  for (const chunkPromise of parallelData) {
+    const result  = await Promise.allSettled(chunkPromise);
+    if(!result) continue;
+    result.forEach((result) => {
+      if(result.status === 'rejected') {
+        // In here we could have keep track of the chunks that failed stored them somewhere and retry them later
+        // Not implementing it since it would require more time in testing it out and being sure it works
+        logger.error(result.reason);
+      }
+    });
+  }
 }
 
 /**
@@ -68,15 +74,15 @@ function processSubArray(subArray) {
 /**
  *
  * @param arrays
- * @returns {Promise<Array<PromiseSettledResult<Awaited<*>>>>}
+ * @returns {Promise<any>}
  */
 async function parallelize(arrays) {
   const promises = [];
 
   for (const subArray of arrays) {
     const promisesArray = processSubArray(subArray)
-    promises.push(...promisesArray);
+    promises.push(promisesArray);
   }
 
-  return Promise.allSettled(promises);
+  return Promise.all(promises);
 }

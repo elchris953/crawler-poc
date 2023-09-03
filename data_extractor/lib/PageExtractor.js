@@ -7,6 +7,8 @@ const {redis} = require('./redisCon')
 
 const logger = require('pino')({ name: 'data_extractor' });
 
+// I've started the architecture to parallelize the data extraction on the same machine without wanting to use a queue system
+// But it would've been much better if we had a queue machine that extract by domain
 module.exports = class PageExtractor {
 
   // I should have added a list of blocked keywords/domains to stop the crawler entering to deep
@@ -16,13 +18,8 @@ module.exports = class PageExtractor {
     // Possibly there could have more Google Maps aliases, but I really didn't know any other
     this.googleMapsSite = 'https://goo.gl/maps/'
     this.isOperationEngaged = true;
-
-    // Timeout is set to 1 or 2 minute because of some OOM errors that I was getting
-    // I've started the architecture to parallelize the data extraction on the same machine without wanting to use a queue system
-    // But it would've been much better if we had a queue machine that extract by domain
-    // This example below alloc too much memory to sustain multiple promises
-    this.timeout = 60000;
-    this.axiosTimeout = 15000;
+    this.generationLimit = 10;
+    this.axiosTimeout = 30000;
 
     this.blockedDomains = [
       'facebook.com',
@@ -39,14 +36,18 @@ module.exports = class PageExtractor {
   /**
    * Consume page
    * @param [url]
+   * @param [generation]
    * @returns {Promise<void>}
    */
-  async consume(url) {
+  async consume(url, generation = 1) {
     if (!url) {
       url = `https://${this.url}`;
+    }
 
-      // Set timer of execution when to stop digging
-      setTimeout(() => this.isOperationEngaged = false, this.timeout);
+    // Exit if generation limit is reached
+    if (generation >= this.generationLimit) {
+      logger.info(`Generation limit reached for ${this.url}`)
+      return;
     }
 
     // Exit if domain is blocked
@@ -61,15 +62,16 @@ module.exports = class PageExtractor {
     if (isAccessed) return;
     else await redis.sadd('accessedURLs', url);
 
-    await this.extractData(url);
+    await this.extractData(url, generation);
   }
 
   /**
    * Extract data from page
    * @param url
+   * @param generation
    * @returns {Promise<boolean>}
    */
-  async extractData(url) {
+  async extractData(url, generation) {
     // Get page
     const response = await this.getPage(url);
     if(!response) return false;
@@ -80,11 +82,13 @@ module.exports = class PageExtractor {
 
     // Load page
     let $ = cheerio.load(response.data);
-    let anchor = $('a');
 
-    if(anchor && anchor?.length > 0) {
-      for(const a of anchor) {
-        const href = a?.attribs?.href;
+    // Copy only anchors while delete the rest of the page
+    const anchorData = this.extractAnchorData($);
+    $ = null;
+
+    if(anchorData && anchorData?.length > 0) {
+      for(const href of anchorData) {
         if(!href) return false;
 
         const socialLinks = new SocialLinks()
@@ -120,9 +124,9 @@ module.exports = class PageExtractor {
               profile: profileName
             }));
           } else if(href.startsWith('/')) {
-            await this.consume(url + href);
+            await this.consume(url + href, generation++);
           } else {
-            await this.consume(href);
+            await this.consume(href, generation++);
           }
         }
       }
@@ -154,5 +158,25 @@ module.exports = class PageExtractor {
       logger.error(`Error getting page for url: ${url} reason: ${e?.cause?.code}`);
       return false;
     }
+  }
+
+  /**
+   * Extract anchor data
+   * @param $
+   * @returns {[string, any]}
+   */
+  extractAnchorData($) {
+    let anchorData;
+    let loadedAnchor = $('a');
+    if(loadedAnchor?.length > 0) {
+      anchorData = Object.entries(loadedAnchor).reduce((acc, curr) => {
+        const href = curr?.[1]?.attribs?.href;
+        if (href) acc.push(href);
+
+        return acc;
+      }, []);
+    }
+
+    return anchorData;
   }
 }

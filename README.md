@@ -8,6 +8,12 @@ Pre-requisites:
 docker-compose up -d
 ```
 
+## Performance
+- 997 domains consumed until 10th generation
+- accessed 2720 pages
+- extracted 1037 unique data
+- processed in 278 seconds (4.6 minutes)
+
 ## What it contains
 
 It contains two services:

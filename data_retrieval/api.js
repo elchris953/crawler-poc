@@ -33,8 +33,8 @@ app.get('/search', async (req, res) => {
     let definitionArray = [];
 
     // I am still a newbie when it comes to elastic search queries, so I went with the most basic approach
-    if(domain) definitionArray += `domain:"${domain}*"`;
-    if(phone) definitionArray += `phone:"${phone}*"`;
+    if(domain) definitionArray.push(`domain:"${domain}*"`);
+    if(phone) definitionArray.push(`phone:"${phone}*"`);
 
     elasticParams.query = {
       query_string: {
